@@ -268,6 +268,75 @@ export const createReservation = mutation({
   }
 });
 
+export const createReservationIfAvailable = mutation({
+  args: {
+    restaurantId: v.id("restaurants"),
+    customerId: v.optional(v.id("customers")),
+    runId: v.id("agentRuns"),
+    name: v.string(),
+    contact: v.string(),
+    date: v.string(),
+    time: v.string(),
+    partySize: v.number(),
+    specialRequests: v.optional(v.string()),
+    status: v.string()
+  },
+  handler: async (ctx, args) => {
+    const now = Date.now();
+    const slot = await ctx.db
+      .query("reservationSlots")
+      .withIndex("by_restaurant_date_time", (q) =>
+        q.eq("restaurantId", args.restaurantId).eq("date", args.date).eq("time", args.time)
+      )
+      .first();
+    const capacity = slot?.capacity ?? 3;
+    const existing = await ctx.db
+      .query("reservations")
+      .withIndex("by_restaurant_slot", (q) =>
+        q.eq("restaurantId", args.restaurantId).eq("date", args.date).eq("time", args.time)
+      )
+      .collect();
+    const activeReservations = existing.filter((reservation) =>
+      ["confirmed", "pending_payment", "pending_confirmation"].includes(reservation.status)
+    );
+
+    if (activeReservations.length >= capacity) {
+      await ctx.db.insert("runEvents", {
+        runId: args.runId,
+        type: "reservation_slot_full",
+        summary: `Reservation slot ${args.date} at ${args.time} is full.`,
+        data: { capacity, booked: activeReservations.length, date: args.date, time: args.time },
+        createdAt: now
+      });
+      return {
+        ok: false,
+        reason: "slot_full",
+        capacity,
+        booked: activeReservations.length
+      };
+    }
+
+    const reservationId = await ctx.db.insert("reservations", {
+      ...args,
+      createdAt: now,
+      updatedAt: now
+    });
+    await ctx.db.insert("runEvents", {
+      runId: args.runId,
+      type: "reservation_created",
+      summary: `Reservation auto-created after slot check: ${activeReservations.length + 1}/${capacity} used.`,
+      data: { reservationId, capacity, booked: activeReservations.length + 1, date: args.date, time: args.time },
+      createdAt: now
+    });
+    return {
+      ok: true,
+      reservationId,
+      capacity,
+      booked: activeReservations.length + 1
+    };
+  }
+});
+
 export const createCateringLead = mutation({
   args: {
     restaurantId: v.id("restaurants"),

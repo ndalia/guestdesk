@@ -53,6 +53,7 @@ export type HermesHandoff = {
     restaurantProfile: Record<string, unknown>;
     relevantPolicies: Record<string, unknown>;
     dependencyResults: Record<string, unknown>[];
+    expertise: string;
     allowedTools: string[];
     prohibitedActions: string[];
     successCriteria: string[];

@@ -11,7 +11,8 @@ export async function searchCurrentLocalInfo(args: {
   const narrowQuery = `${args.query} Location: ${args.location}`;
   if (!apiKey) {
     return {
-      answer: "Live parking search is not configured yet. Add LINKUP_API_KEY to enable current local results.",
+      answer:
+        "For parking: I do not have Linkup configured for live garage availability yet, so I cannot verify current open spots. Freekeh is in San Francisco's Mission District; guests should plan extra arrival time and check current nearby garage or street parking before leaving.",
       sources: [{ title: "Linkup not configured", snippet: narrowQuery }]
     };
   }
@@ -29,7 +30,8 @@ export async function searchCurrentLocalInfo(args: {
   });
   if (!response.ok) {
     return {
-      answer: "I could not complete the live parking search right now, but the rest of the request can continue.",
+      answer:
+        "For parking: the live search failed, so I cannot verify current open spots. The rest of the request can continue, and guests should check current nearby garage or street parking before leaving.",
       sources: [{ title: "Linkup request failed", snippet: `${response.status} ${response.statusText}` }]
     };
   }

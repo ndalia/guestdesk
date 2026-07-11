@@ -107,6 +107,14 @@ export default defineSchema({
     data: v.any(),
     createdAt: v.number()
   }).index("by_run", ["runId"]),
+  reservationSlots: defineTable({
+    restaurantId: v.id("restaurants"),
+    date: v.string(),
+    time: v.string(),
+    capacity: v.number(),
+    note: v.optional(v.string()),
+    updatedAt: v.number()
+  }).index("by_restaurant_date_time", ["restaurantId", "date", "time"]),
   reservations: defineTable({
     restaurantId: v.id("restaurants"),
     customerId: v.optional(v.id("customers")),
@@ -121,7 +129,9 @@ export default defineSchema({
     confirmationToken: v.optional(v.string()),
     createdAt: v.number(),
     updatedAt: v.number()
-  }).index("by_customer", ["customerId"]),
+  })
+    .index("by_customer", ["customerId"])
+    .index("by_restaurant_slot", ["restaurantId", "date", "time"]),
   cateringLeads: defineTable({
     restaurantId: v.id("restaurants"),
     runId: v.id("agentRuns"),

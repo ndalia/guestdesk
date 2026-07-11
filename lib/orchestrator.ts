@@ -20,6 +20,7 @@ function asPolicy(value: unknown): RestaurantPolicy {
 
 export async function processGuestRequest(input: ProcessGuestRequestInput): Promise<VoiceResponse> {
   const convex = getConvexClient();
+  const customerId = input.customerId ? (input.customerId as ConvexId) : undefined;
   let restaurantId = input.restaurantId as ConvexId;
   if (!restaurantId || restaurantId === "default" || restaurantId === "freekeh") {
     const restaurant = await convex.query(api.orchestration.getDefaultRestaurant, {});
@@ -30,7 +31,7 @@ export async function processGuestRequest(input: ProcessGuestRequestInput): Prom
   const started = await convex.mutation(api.orchestration.startRun, {
     conversationExternalId: input.conversationId,
     restaurantId,
-    customerId: input.customerId as ConvexId | undefined,
+    customerId,
     message: input.message,
     channel: input.channel ?? "voice"
   });
@@ -90,8 +91,41 @@ export async function processGuestRequest(input: ProcessGuestRequestInput): Prom
         knowledge
       });
       await convex.mutation(api.orchestration.recordTaskAndHandoff, { runId, task, handoff });
+      await convex.mutation(api.orchestration.recordEvent, {
+        runId,
+        type: "specialist_planned",
+        summary: `Manager selected ${task.runtimeRoleName} for this request.`,
+        data: {
+          taskId: task.taskId,
+          specialist: task.specialist,
+          objective: task.objective,
+          expertise: handoff.context.expertise,
+          allowedTools: task.allowedTools
+        }
+      });
       const result = await delegateWithHermes(handoff, () => runLocalSpecialist(handoff, knowledge));
       modelCallCount += result.modelCalls;
+      if (result.usedHermes) {
+        await convex.mutation(api.orchestration.recordEvent, {
+          runId,
+          type: "specialist_spawned",
+          summary: `Hermes spawned ${task.runtimeRoleName} with isolated handoff context.`,
+          data: { taskId: task.taskId, usedHermes: true, expertise: handoff.context.expertise }
+        });
+      }
+      await convex.mutation(api.orchestration.recordEvent, {
+        runId,
+        type: "specialist_started",
+        summary: result.usedHermes
+          ? `${task.runtimeRoleName} ran through Hermes delegation.`
+          : `${task.runtimeRoleName} ran through local deterministic fallback: ${result.fallbackReason ?? "Hermes did not return a usable delegation."}`,
+        data: {
+          taskId: task.taskId,
+          usedHermes: result.usedHermes,
+          modelCalls: result.modelCalls,
+          fallbackReason: result.fallbackReason
+        }
+      });
       await convex.mutation(api.orchestration.recordSpecialistResult, {
         runId,
         taskId: task.taskId,
@@ -147,16 +181,52 @@ export async function processGuestRequest(input: ProcessGuestRequestInput): Prom
         completedActions.push({ toolName: "create_catering_lead", leadId });
       }
       if (action.toolName === "create_reservation") {
-        confirmationToken = makeToken();
-        await convex.mutation(api.orchestration.createPendingConfirmation, {
-          runId,
-          conversationId: started.conversationId,
-          restaurantId,
-          customerId: input.customerId as ConvexId | undefined,
-          token: confirmationToken,
-          action: "create_reservation",
-          payload: action.arguments
-        });
+        const args = action.arguments as any;
+        if ((input.channel ?? "voice") === "web") {
+          const reservation = await convex.mutation(api.orchestration.createReservationIfAvailable, {
+            restaurantId,
+            customerId,
+            runId,
+            name: String(args.name),
+            contact: String(args.contact),
+            date: String(args.date),
+            time: String(args.time),
+            partySize: Number(args.partySize),
+            specialRequests: args.specialRequests ? String(args.specialRequests) : undefined,
+            status: "confirmed"
+          });
+          if (reservation.ok) {
+            completedActions.push({
+              toolName: "create_reservation",
+              reservationId: reservation.reservationId,
+              slotUsage: `${reservation.booked}/${reservation.capacity}`
+            });
+            spokenParts.push(
+              `I booked the reservation in the demo database. That slot is now ${reservation.booked} of ${reservation.capacity} booked.`
+            );
+          } else {
+            completedActions.push({
+              toolName: "check_availability",
+              status: "slot_full",
+              date: args.date,
+              time: args.time
+            });
+            spokenParts.push(
+              `I checked the simple reservation database and ${args.date} at ${args.time} is full, so I did not create the reservation.`
+            );
+          }
+        } else {
+          confirmationToken = makeToken();
+          await convex.mutation(api.orchestration.createPendingConfirmation, {
+            runId,
+            conversationId: started.conversationId,
+            restaurantId,
+            customerId,
+            token: confirmationToken,
+            action: "create_reservation",
+            payload: action.arguments
+          });
+        }
       }
     }
   }
