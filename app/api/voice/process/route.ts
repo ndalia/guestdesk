@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { processGuestRequest } from "../../../../lib/orchestrator";
 
+export const runtime = "edge";
+
 function authorized(request: NextRequest) {
   const secret = process.env.ELEVENLABS_WEBHOOK_SECRET;
   if (!secret) return true;

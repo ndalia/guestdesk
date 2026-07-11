@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 
+export const runtime = "edge";
+
 export async function POST(request: NextRequest) {
   const secret = process.env.DODO_WEBHOOK_SECRET;
   if (secret && request.headers.get("dodo-signature") !== secret) {

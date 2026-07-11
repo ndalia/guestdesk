@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { processGuestRequest } from "../../../../lib/orchestrator";
 
+export const runtime = "edge";
+
 export async function POST(request: Request) {
   try {
     const body = await request.json();
