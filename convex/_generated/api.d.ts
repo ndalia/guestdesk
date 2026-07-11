@@ -8,7 +8,9 @@
  * @module
  */
 
+import type * as dashboard from "../dashboard.js";
 import type * as orchestration from "../orchestration.js";
+import type * as scripts from "../scripts.js";
 import type * as seed from "../seed.js";
 
 import type {
@@ -18,7 +20,9 @@ import type {
 } from "convex/server";
 
 declare const fullApi: ApiFromModules<{
+  dashboard: typeof dashboard;
   orchestration: typeof orchestration;
+  scripts: typeof scripts;
   seed: typeof seed;
 }>;
 

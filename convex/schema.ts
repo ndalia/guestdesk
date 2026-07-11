@@ -163,5 +163,12 @@ export default defineSchema({
     metadata: v.any(),
     createdAt: v.number(),
     updatedAt: v.number()
-  }).index("by_reservation", ["reservationId"])
+  }).index("by_reservation", ["reservationId"]),
+  callScripts: defineTable({
+    restaurantId: v.id("restaurants"),
+    key: v.string(),
+    title: v.string(),
+    body: v.string(),
+    updatedAt: v.number()
+  }).index("by_restaurant", ["restaurantId"])
 });
