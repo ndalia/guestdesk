@@ -1,0 +1,28 @@
+{
+  "name": "guestops-agency",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "lint": "next lint",
+    "typecheck": "tsc --noEmit",
+    "convex:dev": "convex dev",
+    "convex:deploy": "convex deploy",
+    "seed": "convex run seed:seedDemoRestaurant"
+  },
+  "dependencies": {
+    "convex": "^1.16.3",
+    "next": "^14.2.5",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
+  },
+  "devDependencies": {
+    "@types/node": "^20.14.10",
+    "@types/react": "^18.3.3",
+    "@types/react-dom": "^18.3.0",
+    "eslint": "^8.57.0",
+    "eslint-config-next": "^14.2.5",
+    "typescript": "^5.5.3"
+  }
+}

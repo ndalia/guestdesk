@@ -1,0 +1,9 @@
+node_modules
+.next
+.env.local
+.env
+.vercel
+dist
+tsconfig.tsbuildinfo
+.gstack
+.serena
