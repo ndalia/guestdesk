@@ -148,6 +148,6 @@ export function planGuestRequest(runId: string, message: string, knownFields: Re
     tasks: tasks.slice(0, Number(process.env.MAX_SPECIALISTS_PER_RUN ?? 3)),
     needsCustomerInput: missingFields.length > 0,
     missingFields: [...new Set(missingFields)],
-    needsCustomerConfirmation: wantsReservation
+    needsCustomerConfirmation: wantsReservation || wantsCatering
   };
 }

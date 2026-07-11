@@ -117,7 +117,7 @@ export async function runLocalSpecialist(handoff: HermesHandoff, knowledge: Arra
                 notes: message
               },
               evidenceSourceIds: ["private-events"],
-              needsCustomerConfirmation: false
+              needsCustomerConfirmation: true
             }
           ],
       missingFields: missing,
