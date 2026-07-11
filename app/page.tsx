@@ -8,11 +8,21 @@ type ChatMessage = {
   id: string;
   role: "guest" | "manager";
   text: string;
+  emailDraft?: EmailDraft;
 };
+
+type EmailDraft = {
+  to: string;
+  subject: string;
+  body: string;
+};
+
+type CompletedAction = Record<string, unknown> & { emailDraft?: EmailDraft };
 
 type PendingConfirmation = {
   runId: string;
   confirmationToken: string;
+  confirmationAction?: string;
 };
 
 const demoMessage =
@@ -72,6 +82,14 @@ function expertiseForRole(roleName: string) {
   if (roleName.includes("Parking")) return "Expertise: live local parking or transit search with restaurant context.";
   if (roleName.includes("Safe Decline")) return "Expertise: unsupported request handling and policy-safe decline.";
   return "Expertise: verified menu, allergen, hours, cake, and restaurant policy knowledge.";
+}
+
+function confirmationButtonLabel(action?: string) {
+  return action === "create_catering_lead" ? "Save inquiry" : action === "create_reservation" ? "Confirm reservation" : "Confirm action";
+}
+
+function emailDraftFromResponse(body: { completedActions?: CompletedAction[] }) {
+  return body.completedActions?.find((action) => action.emailDraft)?.emailDraft;
 }
 
 async function readJsonResponse(response: Response) {
@@ -162,7 +180,7 @@ function DemoConsole() {
       ]);
       setAutomationSteps((current) => [...current, "Manager reviewed outputs and returned the customer-facing response."]);
       if (body.status === "needs_confirmation" && body.confirmationToken) {
-        setPending({ runId: body.runId, confirmationToken: body.confirmationToken });
+        setPending({ runId: body.runId, confirmationToken: body.confirmationToken, confirmationAction: body.confirmationAction });
       }
     } catch (error) {
       setMessages((current) => [
@@ -198,7 +216,12 @@ function DemoConsole() {
       setMessages((current) => [
         ...current,
         { id: crypto.randomUUID(), role: "guest", text: confirmed ? "Yes, please confirm it." : "No, do not book it." },
-        { id: crypto.randomUUID(), role: "manager", text: body.spokenResponse ?? "Confirmation complete." }
+        {
+          id: crypto.randomUUID(),
+          role: "manager",
+          text: body.spokenResponse ?? "Confirmation complete.",
+          emailDraft: emailDraftFromResponse(body)
+        }
       ]);
       setAutomationSteps((current) => [...current, "Manager completed the confirmed action and persisted the result."]);
       setPending(null);
@@ -247,6 +270,22 @@ function DemoConsole() {
               <article className={`chat-message ${message.role}`} key={message.id}>
                 <strong>{message.role === "guest" ? "Guest" : "GuestOps Manager"}</strong>
                 <p>{message.text}</p>
+                {message.emailDraft ? (
+                  <div className="email-draft">
+                    <span>Draft email</span>
+                    <dl>
+                      <div>
+                        <dt>To</dt>
+                        <dd>{message.emailDraft.to}</dd>
+                      </div>
+                      <div>
+                        <dt>Subject</dt>
+                        <dd>{message.emailDraft.subject}</dd>
+                      </div>
+                    </dl>
+                    <pre>{message.emailDraft.body}</pre>
+                  </div>
+                ) : null}
               </article>
             ))}
           </div>
@@ -257,7 +296,7 @@ function DemoConsole() {
               <p>The manager already ran specialists and reviewed outputs. It paused because this write action requires customer confirmation.</p>
               <div>
                 <button type="button" onClick={() => confirmAction(true)} disabled={isSending}>
-                  Confirm reservation
+                  {confirmationButtonLabel(pending.confirmationAction)}
                 </button>
                 <button type="button" className="secondary" onClick={() => confirmAction(false)} disabled={isSending}>
                   Decline

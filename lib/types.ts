@@ -1,5 +1,11 @@
 export type SpecialistKind = "reservation" | "restaurant_knowledge" | "catering_events";
 
+export type EmailDraft = {
+  to: string;
+  subject: string;
+  body: string;
+};
+
 export type RunStatus =
   | "collecting_information"
   | "planning"
@@ -84,8 +90,9 @@ export type VoiceResponse = {
   spokenResponse: string;
   missingFields: string[];
   confirmationToken?: string;
+  confirmationAction?: string;
   checkoutUrl?: string;
-  completedActions: Record<string, unknown>[];
+  completedActions: Array<Record<string, unknown> & { emailDraft?: EmailDraft }>;
 };
 
 export type ProcessGuestRequestInput = {

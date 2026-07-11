@@ -6,6 +6,7 @@
     "dev": "next dev",
     "build": "next build",
     "lint": "next lint",
+    "test:unit": "vitest run",
     "typecheck": "tsc --noEmit",
     "convex:dev": "convex dev",
     "convex:deploy": "convex deploy",
@@ -23,6 +24,7 @@
     "@types/react-dom": "^18.3.0",
     "eslint": "^8.57.0",
     "eslint-config-next": "^14.2.5",
-    "typescript": "^5.5.3"
+    "typescript": "^5.5.3",
+    "vitest": "^4.1.10"
   }
 }

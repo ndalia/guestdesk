@@ -193,6 +193,59 @@ textarea {
   line-height: 1.45;
 }
 
+.email-draft {
+  display: grid;
+  gap: 10px;
+  margin-top: 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fffaf0;
+  padding: 12px;
+}
+
+.email-draft > span {
+  color: var(--warn);
+  font-size: 12px;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.email-draft dl {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+}
+
+.email-draft dl div {
+  display: grid;
+  gap: 2px;
+}
+
+.email-draft dt {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.email-draft dd {
+  margin: 0;
+  line-height: 1.35;
+}
+
+.email-draft pre {
+  max-height: 260px;
+  overflow: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+  margin: 0;
+  border-top: 1px solid var(--line);
+  padding-top: 10px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
 .confirmation {
   border: 1px solid #efbf9b;
   border-radius: 8px;

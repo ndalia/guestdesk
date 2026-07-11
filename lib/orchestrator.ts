@@ -1,4 +1,4 @@
-import type { ConfirmGuestActionInput, ProcessGuestRequestInput, RestaurantPolicy, SpecialistResult, VoiceResponse } from "./types";
+import type { ConfirmGuestActionInput, EmailDraft, ProcessGuestRequestInput, RestaurantPolicy, SpecialistResult, VoiceResponse } from "./types";
 import { api, getConvexClient } from "./convexHttp";
 import { extractFields, planGuestRequest } from "./planner";
 import { reservationRequiresDeposit } from "./policy";
@@ -16,6 +16,60 @@ function makeToken() {
 function asPolicy(value: unknown): RestaurantPolicy {
   if (!value) throw new Error("Restaurant policy is missing. Run the seed mutation first.");
   return value as RestaurantPolicy;
+}
+
+export function requiresCustomerConfirmation(toolName: string) {
+  return toolName === "create_reservation" || toolName === "create_catering_lead";
+}
+
+export function confirmationPromptForAction(action: string, spokenParts: string[]) {
+  const summary = spokenParts.join(" ").trim();
+  const prompt =
+    action === "create_catering_lead"
+      ? "Please confirm that you want me to save this catering/private-event inquiry for staff follow-up."
+      : "Please confirm that you want me to book this reservation.";
+  return [summary, prompt].filter(Boolean).join(" ");
+}
+
+function declinedPromptForAction(action: string) {
+  return action === "create_catering_lead" ? "No problem. I did not save the catering inquiry." : "No problem. I did not make the reservation.";
+}
+
+export function buildCateringLeadEmailDraft(args: {
+  customerName: unknown;
+  contact: unknown;
+  eventType: unknown;
+  dateRange: unknown;
+  guestCount: unknown;
+  notes: unknown;
+}): EmailDraft {
+  const customerName = String(args.customerName || "Guest");
+  const contact = String(args.contact || "Not provided");
+  const eventType = String(args.eventType || "catering/private event");
+  const dateRange = String(args.dateRange || "Not provided");
+  const guestCount = Number(args.guestCount || 0);
+  const notes = String(args.notes || "No additional notes provided.");
+  return {
+    to: "Freekeh catering/private events team",
+    subject: `New catering inquiry: ${guestCount || "unknown number of"} guests, ${dateRange}`,
+    body: `Hi Freekeh team,
+
+A guest submitted a catering/private-event inquiry for staff follow-up.
+
+Guest: ${customerName}
+Contact: ${contact}
+Event type: ${eventType}
+Preferred date or range: ${dateRange}
+Estimated guest count: ${guestCount || "Not provided"}
+
+Guest notes:
+${notes}
+
+Suggested next step: Please contact the guest to confirm availability, menu options, pricing, service style, location, timing, and dietary needs. The assistant has not promised pricing or availability.
+
+Thanks,
+GuestOps Manager`
+  };
 }
 
 export async function processGuestRequest(input: ProcessGuestRequestInput): Promise<VoiceResponse> {
@@ -140,6 +194,7 @@ export async function processGuestRequest(input: ProcessGuestRequestInput): Prom
   const completedActions: Record<string, unknown>[] = [];
   const spokenParts: string[] = [];
   let confirmationToken: string | undefined;
+  let confirmationAction: string | undefined;
   let checkoutUrl: string | undefined;
 
   for (const result of delegated) {
@@ -168,17 +223,31 @@ export async function processGuestRequest(input: ProcessGuestRequestInput): Prom
       }
       if (action.toolName === "create_catering_lead") {
         const args = action.arguments as any;
-        const leadId = await convex.mutation(api.orchestration.createCateringLead, {
-          restaurantId,
-          runId,
-          customerName: String(args.customerName),
-          contact: String(args.contact),
-          eventType: String(args.eventType),
-          dateRange: String(args.dateRange),
-          guestCount: Number(args.guestCount),
-          notes: String(args.notes ?? input.message)
-        });
-        completedActions.push({ toolName: "create_catering_lead", leadId });
+        if (requiresCustomerConfirmation(action.toolName)) {
+          confirmationToken = makeToken();
+          confirmationAction = action.toolName;
+          await convex.mutation(api.orchestration.createPendingConfirmation, {
+            runId,
+            conversationId: started.conversationId,
+            restaurantId,
+            customerId,
+            token: confirmationToken,
+            action: action.toolName,
+            payload: action.arguments
+          });
+        } else {
+          const leadId = await convex.mutation(api.orchestration.createCateringLead, {
+            restaurantId,
+            runId,
+            customerName: String(args.customerName),
+            contact: String(args.contact),
+            eventType: String(args.eventType),
+            dateRange: String(args.dateRange),
+            guestCount: Number(args.guestCount),
+            notes: String(args.notes ?? input.message)
+          });
+          completedActions.push({ toolName: "create_catering_lead", leadId });
+        }
       }
       if (action.toolName === "create_reservation") {
         const args = action.arguments as any;
@@ -217,6 +286,7 @@ export async function processGuestRequest(input: ProcessGuestRequestInput): Prom
           }
         } else {
           confirmationToken = makeToken();
+          confirmationAction = action.toolName;
           await convex.mutation(api.orchestration.createPendingConfirmation, {
             runId,
             conversationId: started.conversationId,
@@ -235,9 +305,10 @@ export async function processGuestRequest(input: ProcessGuestRequestInput): Prom
     return {
       runId: String(runId),
       status: "needs_confirmation",
-      spokenResponse: `${spokenParts.join(" ")} Please confirm that you want me to book this reservation.`,
+      spokenResponse: confirmationPromptForAction(confirmationAction ?? "create_reservation", spokenParts),
       missingFields: [],
       confirmationToken,
+      confirmationAction,
       checkoutUrl,
       completedActions
     };
@@ -275,15 +346,42 @@ export async function confirmGuestAction(input: ConfirmGuestActionInput): Promis
     return {
       runId: input.runId,
       status: "completed",
-      spokenResponse: "No problem. I did not make the reservation.",
+      spokenResponse: declinedPromptForAction(String(pending.action)),
       missingFields: [],
       completedActions: []
     };
   }
 
+  const args = pending.payload as any;
+  if (pending.action === "create_catering_lead") {
+    const emailDraft = buildCateringLeadEmailDraft(args);
+    const leadId = await convex.mutation(api.orchestration.createCateringLead, {
+      restaurantId: pending.restaurantId,
+      runId: input.runId as ConvexId,
+      customerName: String(args.customerName),
+      contact: String(args.contact),
+      eventType: String(args.eventType),
+      dateRange: String(args.dateRange),
+      guestCount: Number(args.guestCount),
+      notes: String(args.notes ?? "")
+    });
+    await convex.mutation(api.orchestration.completeRun, {
+      runId: input.runId as ConvexId,
+      status: "completed",
+      modelCallCount: 0,
+      estimatedCostCents: 0
+    });
+    return {
+      runId: input.runId,
+      status: "completed",
+      spokenResponse: "Thanks, I saved your catering/private-event inquiry and drafted an email for the restaurant team.",
+      missingFields: [],
+      completedActions: [{ toolName: "create_catering_lead", leadId, emailDraft }]
+    };
+  }
+
   const policyBundle = await convex.query(api.orchestration.getRestaurantBundle, { restaurantId: pending.restaurantId });
   const policy = asPolicy(policyBundle.policy);
-  const args = pending.payload as any;
   const partySize = Number(args.partySize);
   const needsDeposit = reservationRequiresDeposit(policy, partySize);
   const reservationId = await convex.mutation(api.orchestration.createReservation, {
